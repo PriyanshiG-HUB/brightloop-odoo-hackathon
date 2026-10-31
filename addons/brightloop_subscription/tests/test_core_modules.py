@@ -195,3 +195,54 @@ class TestBrightloopCoreModules(TransactionCase):
                 "login": "nospecial@brightloop.test",
                 "password": "SecurePassword123",
             })
+
+
+    def test_07_dashboard_sql_aggregation(self):
+        """Test subscription dashboard SQL KPI computation."""
+        dashboard = self.env["subscription.dashboard"].create({"name": "Test Dashboard"})
+        sub = self.env["subscription.subscription"].create({
+            "partner_id": self.customer.id,
+            "plan_id": self.plan.id,
+            "state": "active",
+            "line_ids": [
+                (0, 0, {
+                    "product_id": self.product.id,
+                    "quantity": 2,
+                    "price_unit": 65,
+                })
+            ],
+        })
+        self.assertEqual(sub.state, "active")
+
+        dashboard._compute_metrics()
+        self.assertGreaterEqual(dashboard.total_subscriptions, 1)
+        self.assertGreaterEqual(dashboard.active_subscriptions, 1)
+        self.assertGreaterEqual(dashboard.total_customers, 1)
+        self.assertGreaterEqual(dashboard.monthly_recurring_revenue, 130.0)
+        self.assertGreaterEqual(dashboard.annual_recurring_revenue, 130.0 * 12.0)
+
+    def test_08_subscription_portal_permissions_and_helpers(self):
+        """Test portal helper methods and lifecycle transitions."""
+        sub = self.env["subscription.subscription"].create({
+            "partner_id": self.customer.id,
+            "plan_id": self.plan.id,
+            "state": "active",
+            "line_ids": [
+                (0, 0, {
+                    "product_id": self.product.id,
+                    "quantity": 1,
+                    "price_unit": 65,
+                })
+            ],
+        })
+        self.assertEqual(sub.state, "active")
+
+        sub.action_pause()
+        self.assertEqual(sub.state, "paused")
+        sub.action_resume()
+        self.assertEqual(sub.state, "active")
+
+        self.assertEqual(sub.invoice_count, 0)
+        self.assertEqual(len(sub.invoice_ids), 0)
+        action = sub.action_view_invoices()
+        self.assertEqual(action["type"], "ir.actions.act_window")

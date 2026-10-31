@@ -124,4 +124,32 @@
         <field name="perm_unlink" eval="False"/>
     </record>
 
+    <!-- Customers can read subscription lines of their own subscriptions -->
+    <record id="rule_subscription_line_portal_own" model="ir.rule">
+        <field name="name">Subscription lines: portal own records</field>
+        <field name="model_id" ref="model_subscription_subscription_line"/>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+        <field name="domain_force">
+            [('subscription_id.partner_id', '=', user.partner_id.id)]
+        </field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
+    <!-- Customers can read quotation lines of their own quotations -->
+    <record id="rule_quotation_line_portal_own" model="ir.rule">
+        <field name="name">Quotation lines: portal own records</field>
+        <field name="model_id" ref="model_subscription_quotation_line"/>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+        <field name="domain_force">
+            [('quotation_id.partner_id', '=', user.partner_id.id)]
+        </field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
+
 </odoo>

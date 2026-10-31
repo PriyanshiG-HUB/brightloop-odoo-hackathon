@@ -1,4 +1,3 @@
-
 {
     "name": "Brightloop Subscription Management",
     "version": "17.0.1.0.0",
@@ -29,6 +28,7 @@
         "views/subscription_views.xml",
         "views/discount_views.xml",
         "views/dashboard_views.xml",
+        "views/portal_templates.xml",
 
         # Menus load after all referenced actions
         "views/menu_views.xml",

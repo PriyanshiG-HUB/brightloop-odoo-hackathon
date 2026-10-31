@@ -48,7 +48,12 @@ class Subscription(models.Model):
     amount_untaxed = fields.Monetary(compute="_compute_amounts", store=True)
     amount_tax = fields.Monetary(compute="_compute_amounts", store=True, string="Taxes")
     amount_total = fields.Monetary(compute="_compute_amounts", store=True)
-    invoice_count = fields.Integer(compute="_compute_invoice_count", string="Invoices")
+    invoice_ids = fields.Many2many(
+        "account.move",
+        compute="_compute_invoice_ids",
+        string="Invoices",
+    )
+    invoice_count = fields.Integer(compute="_compute_invoice_ids", string="Invoices Count")
     billing_period_ids = fields.One2many(
         "subscription.billing.period", "subscription_id", string="Billing History"
     )
@@ -95,14 +100,16 @@ class Subscription(models.Model):
             subscription.amount_tax = total_tax
             subscription.amount_total = subscription.amount_untaxed + total_tax
 
-    def _compute_invoice_count(self):
+    @api.depends("billing_period_ids.invoice_id")
+    def _compute_invoice_ids(self):
         for sub in self:
             invoices = sub.billing_period_ids.filtered(lambda p: p.invoice_id).mapped("invoice_id")
+            sub.invoice_ids = [(6, 0, invoices.ids)]
             sub.invoice_count = len(invoices)
 
     def action_view_invoices(self):
         self.ensure_one()
-        invoices = self.billing_period_ids.filtered(lambda p: p.invoice_id).mapped("invoice_id")
+        invoices = self.invoice_ids
         action = {
             "name": _("Invoices"),
             "type": "ir.actions.act_window",

@@ -1,0 +1,384 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Portal Breadcrumbs -->
+    <template id="portal_my_home_menu_subscription" name="Portal layout : subscription menu entries" inherit_id="portal.portal_breadcrumbs" priority="30">
+        <xpath expr="//ol[hasclass('o_portal_submenu')]" position="inside">
+            <li t-if="page_name == 'brightloop_subscription' or subscription" class="breadcrumb-item col-lg-auto">
+                <a t-if="subscription" href="/my/brightloop/subscriptions">Subscriptions</a>
+                <t t-else="">Subscriptions</t>
+            </li>
+            <li t-if="subscription" class="breadcrumb-item col-lg-auto active">
+                <span t-field="subscription.name"/>
+            </li>
+            <li t-if="page_name == 'brightloop_invoices'" class="breadcrumb-item col-lg-auto active">
+                <span>Invoices</span>
+            </li>
+        </xpath>
+    </template>
+
+    <!-- Portal Home Entry (/my) -->
+    <template id="portal_my_home_brightloop" name="Show Brightloop Subscriptions" inherit_id="portal.portal_my_home" priority="30">
+        <xpath expr="//div[hasclass('o_portal_docs')]" position="inside">
+            <t t-call="portal.portal_docs_entry">
+                <t t-set="title">Subscriptions</t>
+                <t t-set="url" t-value="'/my/brightloop/subscriptions'"/>
+                <t t-set="placeholder_count" t-value="'subscription_count'"/>
+            </t>
+        </xpath>
+    </template>
+
+    <!-- Subscriptions List View -->
+    <template id="portal_subscriptions" name="Brightloop Subscriptions">
+        <t t-call="portal.portal_layout">
+            <t t-set="breadcrumbs_searchbar" t-value="True"/>
+
+            <div class="container py-3">
+                <div class="d-flex justify-content-between align-items-center mb-3">
+                    <h3 class="my-0">My Subscriptions</h3>
+                    <form method="get" action="/my/brightloop/subscriptions" class="d-flex">
+                        <input type="text" name="search" class="form-control form-control-sm me-2" placeholder="Search subscriptions..." t-att-value="search or ''"/>
+                        <button type="submit" class="btn btn-sm btn-primary">Search</button>
+                    </form>
+                </div>
+
+                <t t-if="not subscriptions">
+                    <div class="alert alert-info" role="alert">
+                        You do not have any active or past subscriptions yet.
+                    </div>
+                </t>
+
+                <t t-if="subscriptions">
+                    <div class="table-responsive">
+                        <table class="table table-hover align-middle shadow-sm bg-white rounded">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Subscription #</th>
+                                    <th>Plan</th>
+                                    <th>Status</th>
+                                    <th>Start Date</th>
+                                    <th>Next Invoice</th>
+                                    <th class="text-end">Total</th>
+                                    <th class="text-center">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="subscriptions" t-as="sub">
+                                    <tr>
+                                        <td>
+                                            <a t-attf-href="/my/brightloop/subscriptions/#{sub.id}" class="fw-bold text-decoration-none">
+                                                <t t-esc="sub.name"/>
+                                            </a>
+                                        </td>
+                                        <td><t t-esc="sub.plan_id.name"/></td>
+                                        <td>
+                                            <span t-if="sub.state == 'active'" class="badge bg-success">Active</span>
+                                            <span t-elif="sub.state == 'paused'" class="badge bg-warning text-dark">Paused</span>
+                                            <span t-elif="sub.state == 'closed'" class="badge bg-secondary">Closed</span>
+                                            <span t-elif="sub.state == 'cancelled'" class="badge bg-danger">Cancelled</span>
+                                            <span t-elif="sub.state == 'confirmed'" class="badge bg-info text-dark">Confirmed</span>
+                                            <span t-else="" class="badge bg-light text-dark"><t t-esc="sub.state"/></span>
+                                        </td>
+                                        <td><t t-esc="sub.start_date"/></td>
+                                        <td><t t-esc="sub.next_invoice_date or '-'"/></td>
+                                        <td class="text-end fw-bold">
+                                            <span t-field="sub.amount_total" t-options='{"widget": "monetary", "display_currency": sub.currency_id}'/>
+                                        </td>
+                                        <td class="text-center">
+                                            <a t-attf-href="/my/brightloop/subscriptions/#{sub.id}" class="btn btn-sm btn-outline-primary">
+                                                View Details
+                                            </a>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                </t>
+            </div>
+        </t>
+    </template>
+
+    <!-- Subscription Detail View -->
+    <template id="portal_subscription_detail" name="Brightloop Subscription Detail">
+        <t t-call="portal.portal_layout">
+            <div class="container py-3">
+
+                <!-- Flash Messages -->
+                <t t-if="error_message">
+                    <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                        <strong>Error:</strong> <t t-esc="error_message"/>
+                    </div>
+                </t>
+                <t t-if="success_message">
+                    <div class="alert alert-success alert-dismissible fade show" role="alert">
+                        <strong>Success:</strong> <t t-esc="success_message"/>
+                    </div>
+                </t>
+
+                <!-- Header / Controls Card -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white d-flex justify-content-between align-items-center py-3">
+                        <div>
+                            <h4 class="mb-1">
+                                Subscription <span class="text-primary" t-field="subscription.name"/>
+                            </h4>
+                            <span class="text-muted small">Plan: </span>
+                            <span class="badge bg-info text-dark me-2" t-field="subscription.plan_id.name"/>
+                            <span t-if="subscription.state == 'active'" class="badge bg-success">Active</span>
+                            <span t-elif="subscription.state == 'paused'" class="badge bg-warning text-dark">Paused</span>
+                            <span t-elif="subscription.state == 'closed'" class="badge bg-secondary">Closed</span>
+                            <span t-elif="subscription.state == 'cancelled'" class="badge bg-danger">Cancelled</span>
+                            <span t-elif="subscription.state == 'confirmed'" class="badge bg-info text-dark">Confirmed</span>
+                            <span t-else="" class="badge bg-light text-dark"><t t-esc="subscription.state"/></span>
+                        </div>
+
+                        <!-- Customer Action Buttons -->
+                        <div class="d-flex gap-2">
+                            <t t-if="subscription.state == 'active' and subscription.plan_id.allow_pause">
+                                <a t-attf-href="/my/brightloop/subscriptions/#{subscription.id}/pause"
+                                   class="btn btn-sm btn-outline-warning"
+                                   onclick="return confirm('Do you want to pause this subscription?');">
+                                    Pause Subscription
+                                </a>
+                            </t>
+                            <t t-if="subscription.state == 'paused'">
+                                <a t-attf-href="/my/brightloop/subscriptions/#{subscription.id}/resume"
+                                   class="btn btn-sm btn-outline-success">
+                                    Resume Subscription
+                                </a>
+                            </t>
+                            <t t-if="subscription.state in ('active', 'paused') and subscription.plan_id.allow_cancel">
+                                <a t-attf-href="/my/brightloop/subscriptions/#{subscription.id}/cancel"
+                                   class="btn btn-sm btn-outline-danger"
+                                   onclick="return confirm('Are you sure you want to cancel this subscription? This cannot be undone.');">
+                                    Cancel Subscription
+                                </a>
+                            </t>
+                            <t t-if="subscription.state in ('closed', 'cancelled') and subscription.plan_id.allow_renewal">
+                                <a t-attf-href="/my/brightloop/subscriptions/#{subscription.id}/renew"
+                                   class="btn btn-sm btn-outline-primary">
+                                    Renew Subscription
+                                </a>
+                            </t>
+                        </div>
+                    </div>
+
+                    <!-- Subscription Metadata -->
+                    <div class="card-body">
+                        <div class="row g-3">
+                            <div class="col-md-3">
+                                <div class="text-muted small">Start Date</div>
+                                <div class="fw-semibold"><span t-field="subscription.start_date"/></div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-muted small">End Date</div>
+                                <div class="fw-semibold"><span t-esc="subscription.end_date or 'Indefinite'"/></div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-muted small">Next Invoice Date</div>
+                                <div class="fw-semibold"><span t-esc="subscription.next_invoice_date or '-'"/></div>
+                            </div>
+                            <div class="col-md-3">
+                                <div class="text-muted small">Billing Cycle</div>
+                                <div class="fw-semibold text-capitalize"><span t-field="subscription.plan_id.billing_period"/></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Subscription Lines Table -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">Subscription Line Items</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <table class="table mb-0 align-middle">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>Product</th>
+                                    <th class="text-center">Quantity</th>
+                                    <th class="text-end">Unit Price</th>
+                                    <th class="text-end">Taxes</th>
+                                    <th class="text-end">Subtotal</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <t t-foreach="subscription.line_ids" t-as="line">
+                                    <tr>
+                                        <td>
+                                            <div class="fw-semibold"><t t-esc="line.product_id.display_name"/></div>
+                                            <div class="text-muted small" t-if="line.name != line.product_id.display_name"><t t-esc="line.name"/></div>
+                                        </td>
+                                        <td class="text-center"><t t-esc="line.quantity"/></td>
+                                        <td class="text-end">
+                                            <span t-field="line.price_unit" t-options='{"widget": "monetary", "display_currency": subscription.currency_id}'/>
+                                        </td>
+                                        <td class="text-end small text-muted">
+                                            <t t-esc="', '.join(line.tax_ids.mapped('name')) or '-'"/>
+                                        </td>
+                                        <td class="text-end fw-semibold">
+                                            <span t-field="line.subtotal" t-options='{"widget": "monetary", "display_currency": subscription.currency_id}'/>
+                                        </td>
+                                    </tr>
+                                </t>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="card-footer bg-light">
+                        <div class="row justify-content-end">
+                            <div class="col-md-4">
+                                <div class="d-flex justify-content-between py-1">
+                                    <span class="text-muted">Untaxed Amount:</span>
+                                    <span class="fw-semibold" t-field="subscription.amount_untaxed" t-options='{"widget": "monetary", "display_currency": subscription.currency_id}'/>
+                                </div>
+                                <div class="d-flex justify-content-between py-1">
+                                    <span class="text-muted">Taxes:</span>
+                                    <span class="fw-semibold" t-field="subscription.amount_tax" t-options='{"widget": "monetary", "display_currency": subscription.currency_id}'/>
+                                </div>
+                                <hr class="my-1"/>
+                                <div class="d-flex justify-content-between py-1 fs-5">
+                                    <span class="fw-bold">Total:</span>
+                                    <span class="fw-bold text-primary" t-field="subscription.amount_total" t-options='{"widget": "monetary", "display_currency": subscription.currency_id}'/>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Billing History -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">Billing Periods History</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <t t-if="not billing_periods">
+                            <div class="p-3 text-muted small">No billing periods recorded yet.</div>
+                        </t>
+                        <t t-if="billing_periods">
+                            <table class="table mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Period Start</th>
+                                        <th>Period End</th>
+                                        <th>Status</th>
+                                        <th>Invoice Reference</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="billing_periods" t-as="period">
+                                        <tr>
+                                            <td><t t-esc="period.period_start"/></td>
+                                            <td><t t-esc="period.period_end"/></td>
+                                            <td>
+                                                <span t-if="period.state == 'invoiced'" class="badge bg-success">Invoiced</span>
+                                                <span t-elif="period.state == 'pending'" class="badge bg-warning text-dark">Pending</span>
+                                                <span t-elif="period.state == 'failed'" class="badge bg-danger">Failed</span>
+                                                <span t-else="" class="badge bg-light text-dark"><t t-esc="period.state"/></span>
+                                            </td>
+                                            <td>
+                                                <t t-if="period.invoice_id">
+                                                    <span class="fw-semibold" t-esc="period.invoice_id.name"/>
+                                                </t>
+                                                <t t-else="">
+                                                    <span class="text-muted">-</span>
+                                                </t>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </t>
+                    </div>
+                </div>
+
+                <!-- Linked Invoices -->
+                <div class="card shadow-sm mb-4">
+                    <div class="card-header bg-white py-3">
+                        <h5 class="mb-0">Linked Invoices</h5>
+                    </div>
+                    <div class="card-body p-0">
+                        <t t-if="not invoices">
+                            <div class="p-3 text-muted small">No invoices generated yet.</div>
+                        </t>
+                        <t t-if="invoices">
+                            <table class="table mb-0 align-middle">
+                                <thead class="table-light">
+                                    <tr>
+                                        <th>Invoice #</th>
+                                        <th>Invoice Date</th>
+                                        <th>Due Date</th>
+                                        <th>Total</th>
+                                        <th>Payment Status</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <t t-foreach="invoices" t-as="inv">
+                                        <tr>
+                                            <td class="fw-semibold"><t t-esc="inv.name"/></td>
+                                            <td><t t-esc="inv.invoice_date"/></td>
+                                            <td><t t-esc="inv.invoice_date_due or '-'"/></td>
+                                            <td class="fw-bold">
+                                                <span t-field="inv.amount_total" t-options='{"widget": "monetary", "display_currency": inv.currency_id}'/>
+                                            </td>
+                                            <td>
+                                                <span t-if="inv.payment_state in ('paid', 'in_payment')" class="badge bg-success">Paid</span>
+                                                <span t-elif="inv.payment_state == 'not_paid'" class="badge bg-warning text-dark">Not Paid</span>
+                                                <span t-elif="inv.payment_state == 'reversed'" class="badge bg-secondary">Reversed</span>
+                                                <span t-else="" class="badge bg-light text-dark"><t t-esc="inv.payment_state"/></span>
+                                            </td>
+                                        </tr>
+                                    </t>
+                                </tbody>
+                            </table>
+                        </t>
+                    </div>
+                </div>
+
+            </div>
+        </t>
+    </template>
+
+    <!-- Invoices List View -->
+    <template id="portal_invoices" name="Brightloop Invoices">
+        <t t-call="portal.portal_layout">
+            <div class="container py-3">
+                <h3 class="mb-3">My Invoices</h3>
+                <t t-if="not invoices">
+                    <div class="alert alert-info">No invoices found.</div>
+                </t>
+                <t t-if="invoices">
+                    <table class="table table-hover align-middle shadow-sm bg-white rounded">
+                        <thead class="table-light">
+                            <tr>
+                                <th>Invoice</th>
+                                <th>Date</th>
+                                <th>Due Date</th>
+                                <th class="text-end">Total</th>
+                                <th>Status</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <t t-foreach="invoices" t-as="invoice">
+                                <tr>
+                                    <td class="fw-bold"><t t-esc="invoice.name"/></td>
+                                    <td><t t-esc="invoice.invoice_date"/></td>
+                                    <td><t t-esc="invoice.invoice_date_due or '-'"/></td>
+                                    <td class="text-end fw-bold">
+                                        <span t-field="invoice.amount_total" t-options='{"widget": "monetary", "display_currency": invoice.currency_id}'/>
+                                    </td>
+                                    <td>
+                                        <span t-if="invoice.payment_state in ('paid', 'in_payment')" class="badge bg-success">Paid</span>
+                                        <span t-elif="invoice.payment_state == 'not_paid'" class="badge bg-warning text-dark">Not Paid</span>
+                                        <span t-else="" class="badge bg-light text-dark"><t t-esc="invoice.payment_state"/></span>
+                                    </td>
+                                </tr>
+                            </t>
+                        </tbody>
+                    </table>
+                </t>
+            </div>
+        </t>
+    </template>
+
+</odoo>
