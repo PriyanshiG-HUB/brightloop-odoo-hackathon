@@ -23,15 +23,25 @@ a second billing or payment database.
 
 - **Subscription Plans:** Daily, weekly, monthly, and yearly recurring periods with configurable minimum order quantities and lifecycle flags (allow_pause, allow_cancel, allow_renewal, auto_close).
 - **Subscription Lifecycle:** Draft, Quotation, Confirmed, Active, Paused, Closed, and Cancelled state transitions.
-- **Quotation Workflow & Templates:** Reusable subscription.quotation.template presets with validity dates and one-click conversion to active subscriptions via action_convert_to_subscription().
+- **Native Sales Quotations:** Submitting a subscription creates and links an Odoo `sale.order` quotation with the customer, company, currency, payment terms, origin, products, quantities, descriptions, taxes, and eligible discounts. Existing quotations are reused to prevent duplicates.
+- **Quotation Recovery:** Confirmed subscriptions without a linked Sales quotation can use **Generate Quotation**. The linked `sale_order_id` is visible and clickable when present.
+- **Quotation Workflow & Templates:** Reusable `subscription.quotation.template` presets with validity dates, product onchange pricing/taxes, and one-click conversion to subscriptions via `action_convert_to_subscription()`.
 - **Pricing & Variants:** Service products with brand attributes and dynamic variant extra pricing (e.g. +).
-- **Discounts Engine:** Product-scoped fixed and percentage discounts with date, amount, quantity, and usage-limit eligibility checks.
-- **Automated Recurring Invoicing:** Idempotent billing period engine (subscription.billing.period) with dynamic Odoo 17 income account/sales journal resolution, multi-tax computation, and transaction savepoints for failure resilience.
+- **Subscription Lines:** Product, quantity, unit price, taxes, line discounts, currency, and computed subtotal with positive-quantity and 0–100% discount validation.
+- **Discounts Engine:** Product-scoped fixed and percentage discounts with date, amount, quantity, and usage-limit eligibility checks. Fixed discounts are distributed across applicable lines and discount usage is incremented only after successful invoice posting.
+- **Automated Recurring Invoicing:** Idempotent billing-period engine (`subscription.billing.period`) with dynamic Odoo 17 income-account and company sales-journal resolution, tax-inclusive totals, and transaction savepoints for failure resilience.
 - **Idempotency Guarantee:** Unique compound SQL constraint unique(subscription_id, period_start, period_end) prevents duplicate invoices under repeated or concurrent execution.
-- **Customer Portal Self-Service:** Complete customer portal integration on /my, breadcrumbs, subscription list, and rich subscription detail view (/my/brightloop/subscriptions/<id>) with pause, resume, cancel, and renewal actions.
+- **Customer Portal Self-Service:** Customer portal integration on `/my`, breadcrumbs, subscription list, and subscription detail view (`/my/brightloop/subscriptions/<id>`) with pause, resume, cancel, renewal, billing-period, and invoice access.
+- **JSON API:** `/api/v1` endpoints for authentication, user registration/profile, password reset requests, products, plans, customers, subscriptions, and quotations, with Brightloop staff/admin access checks for protected management operations.
 - **High-Performance Executive Dashboard:** PostgreSQL SQL-aggregated MRR, ARR, operational status counts, and cash flow receivables executing in <50ms.
-- **Security & Multi-Company:** Strict multi-company record rules across all models, customer data isolation, and enterprise password complexity validation.
-- **Automated Test Suite:** 24 comprehensive test cases covering billing, quotations, lifecycle, discounts, variants, portal, and dashboard aggregation.
+- **Security & Multi-Company:** Brightloop administrator, internal staff, and portal access groups; multi-company record rules; customer data isolation; and raw-password complexity validation for user creation, password changes, password resets, and explicit password updates.
+- **Automated Test Suite:** 28 Odoo transaction tests covering billing, quotation creation/reuse/recovery, lifecycle, discounts, taxes, variants, portal permissions, dashboard aggregation, template tax propagation, and password validation.
+
+### Planned or not fully runtime-verified
+
+- Payment collection and reconciliation continue to use native Odoo Accounting; Brightloop does not implement a separate payment gateway.
+- End-to-end customer portal journeys and every API endpoint should be rechecked in each teammate's local database before production use.
+- Production deployment, email delivery, external payment integration, and load testing are outside the current local Docker setup.
 
 ## Technology stack
 
@@ -55,14 +65,24 @@ database rather than duplicating native business records:
 - `res.partner` and `res.users` provide customers and authentication.
 - `product.product` provides subscription products and variants.
 - `account.tax` provides tax configuration.
+- `sale.order` provides native Sales quotations and confirmations generated from subscriptions.
 - `account.move` provides customer invoices.
 - `account.payment` and Odoo reconciliation provide payment state.
 - Custom models store plans, subscriptions, lines, discounts, billing periods,
   and dashboard metrics.
 
-The daily cron finds due active subscriptions, creates one billing-period
-record, creates/posts a native invoice, and advances the next invoice date.
-The billing-period unique constraint is the duplicate-billing boundary.
+The daily cron calls `subscription.subscription._cron_generate_invoices()`. It
+finds due active subscriptions, creates or retries one
+`subscription.billing.period` record, creates and posts one native invoice,
+increments eligible discount usage after successful posting, and advances
+`next_invoice_date`. The billing-period unique constraint is the
+duplicate-billing boundary.
+
+For a manual developer or administrator action, call
+`subscription.subscription._generate_invoice()` on an active subscription with
+`next_invoice_date` set. The normal user workflow is to activate the
+subscription and let the scheduled action run; there is no separate manual
+invoice button on the subscription form.
 
 ## Repository structure
 
@@ -72,16 +92,13 @@ The billing-period unique constraint is the duplicate-billing boundary.
 │   └── brightloop_subscription/
 │       ├── __init__.py
 │       ├── __manifest__.py
-│       ├── controllers/        # Customer portal routes
+│       ├── controllers/        # Portal and JSON API routes
 │       ├── data/               # Sequence and scheduled action
-│       ├── models/             # Plans, subscriptions, billing, discounts
+│       ├── models/             # Plans, lines, quotations, billing, discounts
 │       ├── security/           # Groups, record rules, model access CSV
 │       ├── tests/              # Odoo transaction tests
-│       └── views/              # Forms, trees, menus, dashboard, portal XML
-├── docs/
-│   ├── architecture.md
-│   ├── database-schema.md
-│   └── demo-script.md
+│       └── views/              # Forms, trees, actions, menus, dashboard, portal XML
+├── docs/                       # Architecture, schema, demo, audit, security notes
 ├── docker-compose.yml
 ├── .env.example
 ├── .gitignore
@@ -233,15 +250,19 @@ If `lxml` is installed:
 python -c "from pathlib import Path; from lxml import etree; files=list(Path('addons/brightloop_subscription').glob('**/*.xml')); [etree.parse(str(path)) for path in files]; print(f'Validated {len(files)} XML files')"
 ```
 
-For an Odoo-backed test database, run from an Odoo 17 installation:
+For the Docker Odoo 17 environment, run the addon upgrade and transaction tests
+without changing the long-running web port:
 
 ```cmd
-odoo-bin -d brightloop_test --addons-path=addons,<odoo-addons> -i brightloop_subscription --test-enable --stop-after-init
+docker compose exec -T odoo sh -c "odoo -d brightloop --update=brightloop_subscription --test-enable --stop-after-init --http-port=8070 --db_host=db --db_port=5432 --db_user=$USER --db_password=$PASSWORD --log-level=test"
 ```
 
-Runtime claims should be based on actual command output. The repository
-contains Odoo transaction tests, but a full test run requires the Odoo runtime,
-PostgreSQL database, and installed native dependencies.
+On Windows CMD, `$USER` and `$PASSWORD` are expanded inside the container by
+the shell invoked by `sh -c`; alternatively use the values from the running
+container configuration. Runtime claims should be based on actual command
+output. The repository contains Odoo transaction tests, but a full test run
+requires the Odoo runtime, PostgreSQL database, and installed native
+dependencies.
 
 ## Troubleshooting
 
@@ -357,6 +378,9 @@ volumes, database dumps, logs, or generated caches.
 
 - Preserve native Odoo architecture and reuse native Accounting, Sales, Portal,
   products, partners, taxes, invoices, and payments.
+- Passwords supplied through user creation, password changes, reset flows, or
+  explicit password updates must contain more than eight characters, one
+  uppercase letter, one lowercase letter, and one special character.
 - Keep changes focused and avoid modifying unrelated business logic.
 - Inspect the relevant model, view, security rule, and manifest before editing.
 - Validate Python syntax and every addon XML file before committing.
@@ -368,9 +392,9 @@ volumes, database dumps, logs, or generated caches.
 
 ## Contributors and team status
 
-No contributor names are currently verified from repository history because this
-repository has no prior commits in the checked-out Git history. Add contributor
-names only after confirming them from GitHub or committed repository history.
+The checked-out Git history identifies **PriyanshiG-HUB** as the verified
+repository author. Add additional contributor names only after confirming them
+from GitHub or committed repository history.
 
 ## License
 
