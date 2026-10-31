@@ -1,0 +1,36 @@
+<odoo>
+    <record id="view_subscription_dashboard_form" model="ir.ui.view">
+        <field name="name">subscription.dashboard.form</field>
+        <field name="model">subscription.dashboard</field>
+        <field name="arch" type="xml">
+            <form string="Brightloop Dashboard" create="0" edit="0" delete="0">
+                <sheet>
+                    <h1>Brightloop Subscription Overview</h1>
+                    <group col="3">
+                        <field name="active_subscriptions"/>
+                        <field name="monthly_recurring_revenue" widget="monetary"/>
+                        <field name="annual_recurring_revenue" widget="monetary"/>
+                        <field name="revenue_received" widget="monetary"/>
+                        <field name="outstanding_amount" widget="monetary"/>
+                        <field name="overdue_invoice_count"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+    <record id="subscription_dashboard_main" model="subscription.dashboard">
+        <field name="name">Brightloop Overview</field>
+    </record>
+    <record id="action_subscription_dashboard" model="ir.actions.act_window">
+        <field name="name">Brightloop Dashboard</field>
+        <field name="res_model">subscription.dashboard</field>
+        <field name="view_mode">form</field>
+        <field name="res_id" ref="subscription_dashboard_main"/>
+    </record>
+    <template id="portal_subscriptions" name="Brightloop Subscriptions">
+        <t t-call="portal.portal_layout"><div class="container"><h2>My Brightloop Subscriptions</h2><table class="table"><tr><th>Number</th><th>Plan</th><th>Status</th><th>Next invoice</th></tr><t t-foreach="subscriptions" t-as="subscription"><tr><td><t t-esc="subscription.name"/></td><td><t t-esc="subscription.plan_id.name"/></td><td><t t-esc="subscription.state"/></td><td><t t-esc="subscription.next_invoice_date"/></td></tr></t></table></div></t>
+    </template>
+    <template id="portal_invoices" name="Brightloop Invoices">
+        <t t-call="portal.portal_layout"><div class="container"><h2>My Brightloop Invoices</h2><table class="table"><tr><th>Invoice</th><th>Date</th><th>Total</th><th>Status</th></tr><t t-foreach="invoices" t-as="invoice"><tr><td><t t-esc="invoice.name"/></td><td><t t-esc="invoice.invoice_date"/></td><td><t t-esc="invoice.amount_total"/></td><td><t t-esc="invoice.payment_state"/></td></tr></t></table></div></t>
+    </template>
+</odoo>

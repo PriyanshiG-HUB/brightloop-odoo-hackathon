@@ -1,0 +1,9 @@
+<odoo>
+    <menuitem id="menu_brightloop_root" name="Brightloop" sequence="10" groups="brightloop_subscription.group_brightloop_staff"/>
+    <menuitem id="menu_brightloop_dashboard" name="Dashboard" parent="menu_brightloop_root" action="action_subscription_dashboard" sequence="1"/>
+    <menuitem id="menu_brightloop_subscriptions" name="Subscriptions" parent="menu_brightloop_root" sequence="10"/>
+    <menuitem id="menu_brightloop_plans" name="Plans" parent="menu_brightloop_root" action="action_subscription_plan" sequence="20"/>
+    <menuitem id="menu_brightloop_discounts" name="Discounts" parent="menu_brightloop_root" action="action_subscription_discount" sequence="30" groups="brightloop_subscription.group_brightloop_admin"/>
+    <menuitem id="menu_brightloop_subscription_list" name="All Subscriptions" parent="menu_brightloop_subscriptions" action="action_subscription_subscription" sequence="10"/>
+    <menuitem id="menu_brightloop_billing_periods" name="Billing Periods" parent="menu_brightloop_subscriptions" action="action_subscription_billing_period" sequence="20"/>
+</odoo>
