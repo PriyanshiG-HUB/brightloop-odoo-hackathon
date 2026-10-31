@@ -1,9 +1,12 @@
+import logging
 from calendar import monthrange
 from datetime import date, timedelta
 from dateutil.relativedelta import relativedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError, ValidationError
+
+_logger = logging.getLogger(__name__)
 
 
 class Subscription(models.Model):
@@ -51,16 +54,19 @@ class Subscription(models.Model):
     def _compute_amounts(self):
         today = fields.Date.context_today(self)
         for subscription in self:
-            amount = sum(subscription.line_ids.mapped("subtotal"))
+            lines_total = sum(subscription.line_ids.mapped("subtotal"))
             discount_amount = 0
             for discount in subscription.discount_ids:
-                if discount.is_eligible(subscription.line_ids, amount, today):
-                    discount_amount += (
-                        amount * discount.discount_value / 100
-                        if discount.discount_type == "percentage"
-                        else discount.discount_value
+                if discount.is_eligible(subscription.line_ids, lines_total, today):
+                    applicable_lines = subscription.line_ids.filtered(
+                        lambda l: not discount.product_ids or l.product_id in discount.product_ids
                     )
-            subscription.amount_untaxed = max(amount - discount_amount, 0)
+                    applicable_total = sum(applicable_lines.mapped("subtotal"))
+                    if discount.discount_type == "percentage":
+                        discount_amount += applicable_total * (discount.discount_value / 100.0)
+                    elif discount.discount_type == "fixed":
+                        discount_amount += min(discount.discount_value, applicable_total)
+            subscription.amount_untaxed = max(lines_total - discount_amount, 0)
             subscription.amount_total = subscription.amount_untaxed
 
     @api.onchange("plan_id")
@@ -93,6 +99,8 @@ class Subscription(models.Model):
         return super().create(vals_list)
 
     def action_submit_quotation(self):
+        for subscription in self:
+            subscription._get_or_create_sale_order()
         self.write({"state": "quotation"})
         return True
 
@@ -100,8 +108,114 @@ class Subscription(models.Model):
         for subscription in self:
             if not subscription.line_ids:
                 raise UserError(_("Add at least one product before confirming a subscription."))
+            sale_order = subscription._get_or_create_sale_order()
+            if sale_order.state in ("draft", "sent"):
+                sale_order.action_confirm()
         self.write({"state": "confirmed"})
         return True
+
+    def action_create_quotation(self):
+        """Recover or create the quotation linked to a confirmed subscription."""
+        for subscription in self:
+            subscription._get_or_create_sale_order()
+        return True
+
+    def _get_or_create_sale_order(self):
+        self.ensure_one()
+        self.env.cr.execute(
+            "SELECT id FROM subscription_subscription WHERE id = %s FOR UPDATE",
+            (self.id,),
+        )
+        self.invalidate_recordset(["sale_order_id"])
+        if self.sale_order_id:
+            return self.sale_order_id
+        if not self.line_ids:
+            raise UserError(_("Add at least one product before creating a quotation."))
+        existing_order = self.env["sale.order"].search([
+            ("origin", "=", self.name),
+            ("company_id", "=", self.company_id.id),
+        ], limit=1)
+        if existing_order:
+            self.sale_order_id = existing_order
+            return existing_order
+
+        order_lines = []
+        for line_values in self._prepare_sale_order_line_values():
+            order_lines.append((0, 0, line_values))
+        sale_order = self.env["sale.order"].create({
+            "partner_id": self.partner_id.id,
+            "company_id": self.company_id.id,
+            "currency_id": self.currency_id.id,
+            "payment_term_id": self.payment_term_id.id or False,
+            "origin": self.name,
+            "order_line": order_lines,
+        })
+        self.sale_order_id = sale_order
+        return sale_order
+
+    def _get_eligible_discounts(self, amount, today):
+        self.ensure_one()
+        return self.discount_ids.filtered(
+            lambda discount: discount.is_eligible(self.line_ids, amount, today)
+        )
+
+    def _prepare_discounted_line_values(self, today=None):
+        self.ensure_one()
+        today = today or fields.Date.context_today(self)
+        lines_total = sum(self.line_ids.mapped("subtotal"))
+        eligible_discounts = self._get_eligible_discounts(lines_total, today)
+
+        line_fixed_discounts = {line.id: 0.0 for line in self.line_ids}
+        line_pct_discounts = {line.id: 0.0 for line in self.line_ids}
+
+        for discount in eligible_discounts:
+            applicable_lines = self.line_ids.filtered(
+                lambda l: not discount.product_ids or l.product_id in discount.product_ids
+            )
+            if not applicable_lines:
+                continue
+
+            if discount.discount_type == "percentage":
+                for line in applicable_lines:
+                    line_pct_discounts[line.id] += discount.discount_value
+            elif discount.discount_type == "fixed":
+                applicable_total = sum(applicable_lines.mapped("subtotal"))
+                if applicable_total > 0:
+                    capped_fixed = min(discount.discount_value, applicable_total)
+                    for line in applicable_lines:
+                        line_fixed_discounts[line.id] += capped_fixed * (line.subtotal / applicable_total)
+
+        values = []
+        for line in self.line_ids:
+            fixed_share = line_fixed_discounts.get(line.id, 0.0)
+            pct_share = line_pct_discounts.get(line.id, 0.0)
+            price_unit = max(
+                line.price_unit - (fixed_share / line.quantity if line.quantity else 0),
+                0,
+            )
+            discount = min(100.0, line.discount + pct_share)
+            values.append({
+                "product_id": line.product_id.id,
+                "name": line.product_id.get_product_multiline_description_sale(),
+                "quantity": line.quantity,
+                "price_unit": price_unit,
+                "discount": discount,
+                "tax_ids": line.tax_ids,
+            })
+        return values
+
+    def _prepare_sale_order_line_values(self, today=None):
+        return [
+            {
+                "product_id": values["product_id"],
+                "name": values["name"],
+                "product_uom_qty": values["quantity"],
+                "price_unit": values["price_unit"],
+                "discount": values["discount"],
+                "tax_id": [(6, 0, values["tax_ids"].ids)],
+            }
+            for values in self._prepare_discounted_line_values(today=today)
+        ]
 
     def action_activate(self):
         for subscription in self:
@@ -155,38 +269,64 @@ class Subscription(models.Model):
 
     def _prepare_invoice(self, period_start, period_end):
         self.ensure_one()
+        journal = self.env["account.journal"].search([
+            ("type", "=", "sale"),
+            ("company_id", "=", self.company_id.id),
+        ], limit=1)
+        if not journal:
+            raise UserError(_(
+                "No sales journal found for company '%s'. "
+                "Please configure a sales journal before generating invoices."
+            ) % self.company_id.name)
+
         invoice_lines = []
-        eligible_discounts = self.discount_ids.filtered(
-            lambda discount: discount.is_eligible(
-                self.line_ids, sum(self.line_ids.mapped("subtotal")), period_start
-            )
-        )
-        fixed_discount = sum(
-            discount.discount_value
-            for discount in eligible_discounts
-            if discount.discount_type == "fixed"
-        )
-        percentage_discount = sum(
-            discount.discount_value
-            for discount in eligible_discounts
-            if discount.discount_type == "percentage"
-        )
-        lines_total = sum(self.line_ids.mapped("subtotal"))
-        for line in self.line_ids:
-            fixed_share = fixed_discount * line.subtotal / lines_total if lines_total else 0
-            discount = min(100, line.discount + percentage_discount)
-            price_unit = line.price_unit - (fixed_share / line.quantity if line.quantity else 0)
+        for values in self._prepare_discounted_line_values(today=period_start):
+            product = self.env["product.product"].browse(
+                values["product_id"]
+            ).with_company(self.company_id)
+
+            # Native Odoo 17 income account resolution:
+            income_account = False
+            if hasattr(product, "_get_product_accounts"):
+                income_account = product._get_product_accounts().get("income")
+            elif hasattr(product.product_tmpl_id, "get_product_accounts"):
+                income_account = product.product_tmpl_id.get_product_accounts().get("income")
+
+            if not income_account:
+                income_account = (
+                    product.property_account_income_id
+                    or product.categ_id.property_account_income_categ_id
+                )
+
+            # Company fallback to active income account
+            if not income_account:
+                income_account = self.env["account.account"].search([
+                    ("account_type", "=", "income"),
+                    ("company_id", "=", self.company_id.id),
+                    ("deprecated", "=", False),
+                ], limit=1)
+
+            if not income_account:
+                raise UserError(_(
+                    "No income account found for product '%s' in company '%s'. "
+                    "Please configure an income account on the product, its category, "
+                    "or create an active income account for the company."
+                ) % (product.display_name, self.company_id.name))
+
             invoice_lines.append((0, 0, {
-                "product_id": line.product_id.id,
-                "name": line.product_id.display_name,
-                "quantity": line.quantity,
-                "price_unit": max(price_unit, 0),
-                "discount": discount,
-                "tax_ids": [(6, 0, line.tax_ids.ids)],
+                "product_id": product.id,
+                "account_id": income_account.id,
+                "name": values["name"],
+                "quantity": values["quantity"],
+                "price_unit": values["price_unit"],
+                "discount": values["discount"],
+                "tax_ids": [(6, 0, values["tax_ids"].ids)],
             }))
+
         return {
             "move_type": "out_invoice",
             "partner_id": self.partner_id.id,
+            "journal_id": journal.id,
             "invoice_date": period_start,
             "invoice_date_due": period_end,
             "invoice_origin": self.name,
@@ -203,29 +343,37 @@ class Subscription(models.Model):
             if subscription.state != "active" or not subscription.next_invoice_date:
                 continue
             period_start, period_end = subscription._billing_period()
+            lines_total = sum(subscription.line_ids.mapped("subtotal"))
             existing = BillingPeriod.search([
                 ("subscription_id", "=", subscription.id),
                 ("period_start", "=", period_start),
                 ("period_end", "=", period_end),
             ], limit=1)
+
             if existing:
-                continue
-            period = BillingPeriod.create({
-                "subscription_id": subscription.id,
-                "period_start": period_start,
-                "period_end": period_end,
-                "state": "pending",
-            })
+                if existing.state == "invoiced":
+                    continue
+                period = existing
+                period.write({"state": "pending"})
+            else:
+                period = BillingPeriod.create({
+                    "subscription_id": subscription.id,
+                    "period_start": period_start,
+                    "period_end": period_end,
+                    "state": "pending",
+                })
+
             try:
-                invoice = AccountMove.create(subscription._prepare_invoice(period_start, period_end))
-                invoice.action_post()
-                period.write({"invoice_id": invoice.id, "state": "invoiced"})
-                subscription.next_invoice_date = subscription._next_date(period_start, subscription.plan_id.billing_period)
-                for discount in subscription.discount_ids:
-                    if discount.is_eligible(subscription.line_ids, subscription.amount_untaxed, period_start):
-                        discount.used_count += 1
+                with self.env.cr.savepoint():
+                    invoice = AccountMove.create(subscription._prepare_invoice(period_start, period_end))
+                    invoice.action_post()
+                    period.write({"invoice_id": invoice.id, "state": "invoiced"})
+                    subscription.next_invoice_date = subscription._next_date(period_start, subscription.plan_id.billing_period)
+                    for discount in subscription.discount_ids:
+                        if discount.is_eligible(subscription.line_ids, lines_total, period_start):
+                            discount.used_count += 1
             except Exception:
-                period.state = "failed"
+                period.write({"state": "failed"})
                 raise
         return True
 
@@ -237,6 +385,14 @@ class Subscription(models.Model):
             ("next_invoice_date", "<=", today),
         ])
         for subscription in subscriptions:
-            with self.env.cr.savepoint():
+            try:
                 subscription._generate_invoice()
+            except Exception as e:
+                _logger.error(
+                    "Brightloop billing cron failed for subscription %s (ID %s): %s",
+                    subscription.name,
+                    subscription.id,
+                    e,
+                    exc_info=True,
+                )
         return True

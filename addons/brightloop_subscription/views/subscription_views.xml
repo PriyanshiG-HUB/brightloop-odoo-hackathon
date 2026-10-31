@@ -37,6 +37,12 @@
                             invisible="state != 'quotation'"
                             class="btn-primary"/>
 
+                    <button name="action_create_quotation"
+                            type="object"
+                            string="Generate Quotation"
+                            invisible="state != 'confirmed' or sale_order_id"
+                            class="btn-primary"/>
+
                     <button name="action_activate"
                             type="object"
                             string="Activate"
@@ -73,7 +79,9 @@
                         <field name="name" readonly="1"/>
                         <field name="partner_id"/>
                         <field name="plan_id"/>
-                        <field name="sale_order_id" readonly="1"/>
+                        <field name="sale_order_id"
+                               readonly="1"
+                               invisible="not sale_order_id"/>
                         <field name="start_date"/>
                         <field name="end_date"/>
                         <field name="next_invoice_date"/>
