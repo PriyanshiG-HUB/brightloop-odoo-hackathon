@@ -1,4 +1,3 @@
-
 <odoo>
 
     <!-- ============================================ -->
@@ -15,21 +14,22 @@
     <!-- USER GROUPS                                  -->
     <!-- ============================================ -->
 
-    <!-- Brightloop Administrator -->
-<record id="group_brightloop_admin" model="res.groups">
-    <field name="name">Brightloop Administrator</field>
-    <field name="category_id" ref="module_category_brightloop"/>
-    <field name="implied_ids"
-           eval="[(4, ref('base.group_user')),
-                  (4, ref('brightloop_subscription.group_brightloop_staff'))]"/>
-</record>
-
     <!-- Brightloop Internal Staff -->
     <record id="group_brightloop_staff" model="res.groups">
         <field name="name">Brightloop Internal Staff</field>
         <field name="category_id" ref="module_category_brightloop"/>
         <field name="implied_ids"
                eval="[(4, ref('base.group_user'))]"/>
+    </record>
+
+    <!-- Brightloop Administrator -->
+    <record id="group_brightloop_admin" model="res.groups">
+        <field name="name">Brightloop Administrator</field>
+        <field name="category_id" ref="module_category_brightloop"/>
+        <field name="implied_ids"
+               eval="[(4, ref('base.group_user')),
+                      (4, ref('brightloop_subscription.group_brightloop_staff'))]"/>
+        <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
     </record>
 
 
@@ -40,10 +40,18 @@
     <!-- Staff can access subscriptions in their company -->
     <record id="rule_subscription_staff_company" model="ir.rule">
         <field name="name">Subscriptions: staff company access</field>
-        <field name="model_id"
-               ref="model_subscription_subscription"/>
-        <field name="groups"
-               eval="[(4, ref('brightloop_subscription.group_brightloop_staff'))]"/>
+        <field name="model_id" ref="model_subscription_subscription"/>
+        <field name="groups" eval="[(4, ref('brightloop_subscription.group_brightloop_staff'))]"/>
+        <field name="domain_force">
+            [('company_id', 'in', company_ids)]
+        </field>
+    </record>
+
+    <!-- Staff can access quotations in their company -->
+    <record id="rule_quotation_staff_company" model="ir.rule">
+        <field name="name">Quotations: staff company access</field>
+        <field name="model_id" ref="model_subscription_quotation"/>
+        <field name="groups" eval="[(4, ref('brightloop_subscription.group_brightloop_staff'))]"/>
         <field name="domain_force">
             [('company_id', 'in', company_ids)]
         </field>
@@ -57,10 +65,8 @@
     <!-- Customers can read only their own subscriptions -->
     <record id="rule_subscription_portal_own" model="ir.rule">
         <field name="name">Subscriptions: portal own records</field>
-        <field name="model_id"
-               ref="model_subscription_subscription"/>
-        <field name="groups"
-               eval="[(4, ref('base.group_portal'))]"/>
+        <field name="model_id" ref="model_subscription_subscription"/>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
         <field name="domain_force">
             [('partner_id', '=', user.partner_id.id)]
         </field>
@@ -70,14 +76,25 @@
         <field name="perm_unlink" eval="False"/>
     </record>
 
+    <!-- Customers can read only their own quotations -->
+    <record id="rule_quotation_portal_own" model="ir.rule">
+        <field name="name">Quotations: portal own records</field>
+        <field name="model_id" ref="model_subscription_quotation"/>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
+        <field name="domain_force">
+            [('partner_id', '=', user.partner_id.id)]
+        </field>
+        <field name="perm_read" eval="True"/>
+        <field name="perm_write" eval="False"/>
+        <field name="perm_create" eval="False"/>
+        <field name="perm_unlink" eval="False"/>
+    </record>
 
     <!-- Customers can read billing periods of their own subscriptions -->
     <record id="rule_billing_period_portal_own" model="ir.rule">
         <field name="name">Billing periods: portal own records</field>
-        <field name="model_id"
-               ref="model_subscription_billing_period"/>
-        <field name="groups"
-               eval="[(4, ref('base.group_portal'))]"/>
+        <field name="model_id" ref="model_subscription_billing_period"/>
+        <field name="groups" eval="[(4, ref('base.group_portal'))]"/>
         <field name="domain_force">
             [('subscription_id.partner_id', '=', user.partner_id.id)]
         </field>

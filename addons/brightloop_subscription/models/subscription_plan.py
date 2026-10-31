@@ -24,9 +24,10 @@ class SubscriptionPlan(models.Model):
     start_date = fields.Date()
     end_date = fields.Date()
     auto_close = fields.Boolean(default=False)
-    allow_pause = fields.Boolean(default=True)
-    allow_early_close = fields.Boolean(default=True)
-    allow_renewal = fields.Boolean(default=True)
+    allow_pause = fields.Boolean(default=True, string="Allow Pause")
+    allow_early_close = fields.Boolean(default=True, string="Allow Early Close")
+    allow_renewal = fields.Boolean(default=True, string="Allow Renewal")
+    allow_cancel = fields.Boolean(default=True, string="Allow Cancellation")
     active = fields.Boolean(default=True)
     currency_id = fields.Many2one(
         "res.currency", default=lambda self: self.env.company.currency_id, required=True
@@ -34,6 +35,31 @@ class SubscriptionPlan(models.Model):
     company_id = fields.Many2one(
         "res.company", default=lambda self: self.env.company, required=True, index=True
     )
+
+    availability_status = fields.Selection(
+        [
+            ("available", "Available"),
+            ("scheduled", "Scheduled"),
+            ("expired", "Expired"),
+            ("archived", "Archived"),
+        ],
+        compute="_compute_availability_status",
+        store=True,
+        string="Plan Status",
+    )
+
+    @api.depends("active", "start_date", "end_date")
+    def _compute_availability_status(self):
+        today = fields.Date.context_today(self)
+        for plan in self:
+            if not plan.active:
+                plan.availability_status = "archived"
+            elif plan.start_date and plan.start_date > today:
+                plan.availability_status = "scheduled"
+            elif plan.end_date and plan.end_date < today:
+                plan.availability_status = "expired"
+            else:
+                plan.availability_status = "available"
 
     @api.constrains("price", "minimum_quantity", "start_date", "end_date")
     def _check_values(self):
@@ -44,4 +70,3 @@ class SubscriptionPlan(models.Model):
                 raise ValidationError("Minimum quantity must be greater than zero.")
             if plan.start_date and plan.end_date and plan.end_date < plan.start_date:
                 raise ValidationError("Plan end date cannot be before its start date.")
-

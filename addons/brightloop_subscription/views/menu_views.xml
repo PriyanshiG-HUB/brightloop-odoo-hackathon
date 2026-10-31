@@ -1,9 +1,90 @@
 <odoo>
-    <menuitem id="menu_brightloop_root" name="Brightloop" sequence="10" groups="brightloop_subscription.group_brightloop_staff"/>
-    <menuitem id="menu_brightloop_dashboard" name="Dashboard" parent="menu_brightloop_root" action="action_subscription_dashboard" sequence="1"/>
-    <menuitem id="menu_brightloop_subscriptions" name="Subscriptions" parent="menu_brightloop_root" sequence="10"/>
-    <menuitem id="menu_brightloop_plans" name="Plans" parent="menu_brightloop_root" action="action_subscription_plan" sequence="20"/>
-    <menuitem id="menu_brightloop_discounts" name="Discounts" parent="menu_brightloop_root" action="action_subscription_discount" sequence="30" groups="brightloop_subscription.group_brightloop_admin"/>
-    <menuitem id="menu_brightloop_subscription_list" name="All Subscriptions" parent="menu_brightloop_subscriptions" action="action_subscription_subscription" sequence="10"/>
-    <menuitem id="menu_brightloop_billing_periods" name="Billing Periods" parent="menu_brightloop_subscriptions" action="action_subscription_billing_period" sequence="20"/>
+    <!-- Top-level Root Menu -->
+    <menuitem id="menu_brightloop_root"
+              name="Brightloop"
+              sequence="10"
+              groups="brightloop_subscription.group_brightloop_staff"/>
+
+    <!-- Operational Dashboard -->
+    <menuitem id="menu_brightloop_dashboard"
+              name="Dashboard"
+              parent="menu_brightloop_root"
+              action="action_subscription_dashboard"
+              sequence="1"/>
+
+    <!-- Quotations Category -->
+    <menuitem id="menu_brightloop_quotation_parent"
+              name="Quotations"
+              parent="menu_brightloop_root"
+              sequence="5"/>
+
+    <menuitem id="menu_brightloop_quotations"
+              name="Quotations"
+              parent="menu_brightloop_quotation_parent"
+              action="action_subscription_quotation"
+              sequence="10"/>
+
+    <menuitem id="menu_brightloop_quotation_templates"
+              name="Quotation Templates"
+              parent="menu_brightloop_quotation_parent"
+              action="action_subscription_quotation_template"
+              sequence="20"/>
+
+    <!-- Subscriptions Category -->
+    <menuitem id="menu_brightloop_subscriptions"
+              name="Subscriptions"
+              parent="menu_brightloop_root"
+              sequence="10"/>
+
+    <menuitem id="menu_brightloop_subscription_list"
+              name="All Subscriptions"
+              parent="menu_brightloop_subscriptions"
+              action="action_subscription_subscription"
+              sequence="10"/>
+
+    <menuitem id="menu_brightloop_billing_periods"
+              name="Billing Periods"
+              parent="menu_brightloop_subscriptions"
+              action="action_subscription_billing_period"
+              sequence="20"/>
+
+    <!-- Customers Category -->
+    <menuitem id="menu_brightloop_customers"
+              name="Customers"
+              parent="menu_brightloop_root"
+              action="action_brightloop_customers"
+              sequence="15"/>
+
+    <!-- Products & Variants Category -->
+    <menuitem id="menu_brightloop_products_parent"
+              name="Products"
+              parent="menu_brightloop_root"
+              sequence="20"/>
+
+    <menuitem id="menu_brightloop_products"
+              name="Products"
+              parent="menu_brightloop_products_parent"
+              action="action_brightloop_products"
+              sequence="10"/>
+
+    <menuitem id="menu_brightloop_product_variants"
+              name="Product Variants"
+              parent="menu_brightloop_products_parent"
+              action="action_brightloop_product_variants"
+              sequence="20"/>
+
+    <!-- Plans Category -->
+    <menuitem id="menu_brightloop_plans"
+              name="Plans"
+              parent="menu_brightloop_root"
+              action="action_subscription_plan"
+              sequence="25"/>
+
+    <!-- Discounts Category (Admin only) -->
+    <menuitem id="menu_brightloop_discounts"
+              name="Discounts"
+              parent="menu_brightloop_root"
+              action="action_subscription_discount"
+              sequence="30"
+              groups="brightloop_subscription.group_brightloop_admin"/>
 </odoo>

@@ -1,0 +1,181 @@
+<odoo>
+    <!-- Quotation Template Views -->
+    <record id="view_subscription_quotation_template_tree" model="ir.ui.view">
+        <field name="name">subscription.quotation.template.tree</field>
+        <field name="model">subscription.quotation.template</field>
+        <field name="arch" type="xml">
+            <tree string="Quotation Templates">
+                <field name="name"/>
+                <field name="plan_id"/>
+                <field name="validity_days"/>
+                <field name="active"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_subscription_quotation_template_form" model="ir.ui.view">
+        <field name="name">subscription.quotation.template.form</field>
+        <field name="model">subscription.quotation.template</field>
+        <field name="arch" type="xml">
+            <form string="Quotation Template">
+                <sheet>
+                    <widget name="web_ribbon" title="Archived" bg_color="text-bg-danger" invisible="active"/>
+                    <group>
+                        <group>
+                            <field name="name"/>
+                            <field name="plan_id"/>
+                            <field name="validity_days"/>
+                        </group>
+                        <group>
+                            <field name="payment_term_id"/>
+                            <field name="active"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Predefined Product Lines">
+                            <field name="line_ids">
+                                <tree editable="bottom">
+                                    <field name="product_id"/>
+                                    <field name="quantity"/>
+                                    <field name="price_unit"/>
+                                    <field name="discount"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="action_subscription_quotation_template" model="ir.actions.act_window">
+        <field name="name">Quotation Templates</field>
+        <field name="res_model">subscription.quotation.template</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- Subscription Quotation Views -->
+    <record id="view_subscription_quotation_tree" model="ir.ui.view">
+        <field name="name">subscription.quotation.tree</field>
+        <field name="model">subscription.quotation</field>
+        <field name="arch" type="xml">
+            <tree decoration-success="state == 'accepted'"
+                  decoration-info="state == 'sent'"
+                  decoration-danger="state == 'rejected'"
+                  decoration-muted="state == 'draft'">
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="plan_id"/>
+                <field name="template_id"/>
+                <field name="quotation_date"/>
+                <field name="validity_date"/>
+                <field name="amount_total"/>
+                <field name="state" widget="badge"/>
+            </tree>
+        </field>
+    </record>
+
+    <record id="view_subscription_quotation_form" model="ir.ui.view">
+        <field name="name">subscription.quotation.form</field>
+        <field name="model">subscription.quotation</field>
+        <field name="arch" type="xml">
+            <form string="Subscription Quotation">
+                <header>
+                    <button name="action_send"
+                            type="object"
+                            string="Send"
+                            invisible="state != 'draft'"
+                            class="btn-primary"/>
+
+                    <button name="action_accept"
+                            type="object"
+                            string="Accept"
+                            invisible="state not in ['draft', 'sent']"
+                            class="btn-primary"/>
+
+                    <button name="action_convert_to_subscription"
+                            type="object"
+                            string="Convert to Subscription"
+                            invisible="state != 'accepted' or subscription_id"
+                            class="btn-success"/>
+
+                    <button name="action_reject"
+                            type="object"
+                            string="Reject"
+                            invisible="state not in ['draft', 'sent']"/>
+
+                    <field name="state" widget="statusbar" statusbar_visible="draft,sent,accepted,rejected"/>
+                </header>
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="partner_id"/>
+                            <field name="template_id"/>
+                            <field name="plan_id"/>
+                            <field name="subscription_id" readonly="1" invisible="not subscription_id"/>
+                        </group>
+                        <group>
+                            <field name="quotation_date"/>
+                            <field name="validity_date"/>
+                            <field name="payment_term_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <notebook>
+                        <page string="Quotation Lines">
+                            <field name="line_ids">
+                                <tree editable="bottom">
+                                    <field name="product_id"/>
+                                    <field name="quantity"/>
+                                    <field name="price_unit"/>
+                                    <field name="discount"/>
+                                    <field name="tax_ids" widget="many2many_tags"/>
+                                    <field name="subtotal" readonly="1"/>
+                                </tree>
+                            </field>
+                        </page>
+                    </notebook>
+                    <group class="oe_subtotal_footer">
+                        <field name="amount_untaxed"/>
+                        <field name="amount_total"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <record id="view_subscription_quotation_search" model="ir.ui.view">
+        <field name="name">subscription.quotation.search</field>
+        <field name="model">subscription.quotation</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="plan_id"/>
+                <filter string="Draft" name="filter_draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Sent" name="filter_sent" domain="[('state', '=', 'sent')]"/>
+                <filter string="Accepted" name="filter_accepted" domain="[('state', '=', 'accepted')]"/>
+                <filter string="Rejected" name="filter_rejected" domain="[('state', '=', 'rejected')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Customer" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Plan" name="group_plan" context="{'group_by': 'plan_id'}"/>
+                    <filter string="Status" name="group_status" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <record id="action_subscription_quotation" model="ir.actions.act_window">
+        <field name="name">Quotations</field>
+        <field name="res_model">subscription.quotation</field>
+        <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_subscription_quotation_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new subscription quotation.
+            </p>
+        </field>
+    </record>
+</odoo>

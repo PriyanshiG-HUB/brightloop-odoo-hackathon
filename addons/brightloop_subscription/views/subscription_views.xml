@@ -1,4 +1,3 @@
-
 <odoo>
     <!-- Subscription List View -->
     <record id="view_subscription_list" model="ir.ui.view">
@@ -6,6 +5,9 @@
         <field name="model">subscription.subscription</field>
         <field name="arch" type="xml">
             <tree decoration-success="state == 'active'"
+                  decoration-info="state == 'confirmed'"
+                  decoration-warning="state == 'paused'"
+                  decoration-danger="state == 'cancelled'"
                   decoration-muted="state == 'closed'">
                 <field name="name"/>
                 <field name="partner_id"/>
@@ -13,7 +15,7 @@
                 <field name="start_date"/>
                 <field name="next_invoice_date"/>
                 <field name="amount_total"/>
-                <field name="state"/>
+                <field name="state" widget="badge"/>
             </tree>
         </field>
     </record>
@@ -27,7 +29,7 @@
                 <header>
                     <button name="action_submit_quotation"
                             type="object"
-                            string="Quotation"
+                            string="Submit Quotation"
                             invisible="state != 'draft'"
                             class="btn-primary"/>
 
@@ -53,6 +55,12 @@
                             string="Resume"
                             invisible="state != 'paused'"/>
 
+                    <button name="action_cancel"
+                            type="object"
+                            string="Cancel"
+                            invisible="state in ['cancelled', 'closed']"
+                            confirm="Are you sure you want to cancel this subscription?"/>
+
                     <button name="action_close"
                             type="object"
                             string="Close"
@@ -65,23 +73,29 @@
 
                     <field name="state"
                            widget="statusbar"
-                           statusbar_visible="draft,quotation,confirmed,active,closed"/>
+                           statusbar_visible="draft,quotation,confirmed,active,paused,cancelled,closed"/>
                 </header>
 
                 <sheet>
                     <group>
-                        <field name="name" readonly="1"/>
-                        <field name="partner_id"/>
-                        <field name="plan_id"/>
-                        <field name="sale_order_id" readonly="1"/>
-                        <field name="start_date"/>
-                        <field name="end_date"/>
-                        <field name="next_invoice_date"/>
-                        <field name="payment_term_id"/>
+                        <group>
+                            <field name="name" readonly="1"/>
+                            <field name="partner_id"/>
+                            <field name="plan_id"/>
+                            <field name="quotation_id" readonly="1" invisible="not quotation_id"/>
+                            <field name="sale_order_id" readonly="1" invisible="not sale_order_id"/>
+                        </group>
+                        <group>
+                            <field name="start_date"/>
+                            <field name="end_date"/>
+                            <field name="next_invoice_date"/>
+                            <field name="payment_term_id"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
                     </group>
 
                     <notebook>
-                        <page string="Lines">
+                        <page string="Subscription Lines">
                             <field name="line_ids">
                                 <tree editable="bottom">
                                     <field name="product_id"/>
@@ -97,6 +111,17 @@
                         <page string="Discounts">
                             <field name="discount_ids" widget="many2many_tags"/>
                         </page>
+
+                        <page string="Billing History">
+                            <field name="billing_period_ids" readonly="1">
+                                <tree>
+                                    <field name="period_start"/>
+                                    <field name="period_end"/>
+                                    <field name="invoice_id"/>
+                                    <field name="state" widget="badge"/>
+                                </tree>
+                            </field>
+                        </page>
                     </notebook>
 
                     <group class="oe_subtotal_footer">
@@ -108,11 +133,40 @@
         </field>
     </record>
 
+    <!-- Subscription Search View -->
+    <record id="view_subscription_search" model="ir.ui.view">
+        <field name="name">subscription.subscription.search</field>
+        <field name="model">subscription.subscription</field>
+        <field name="arch" type="xml">
+            <search>
+                <field name="name"/>
+                <field name="partner_id"/>
+                <field name="plan_id"/>
+                <filter string="Draft" name="filter_draft" domain="[('state', '=', 'draft')]"/>
+                <filter string="Active" name="filter_active" domain="[('state', '=', 'active')]"/>
+                <filter string="Paused" name="filter_paused" domain="[('state', '=', 'paused')]"/>
+                <filter string="Cancelled" name="filter_cancelled" domain="[('state', '=', 'cancelled')]"/>
+                <filter string="Closed" name="filter_closed" domain="[('state', '=', 'closed')]"/>
+                <group expand="0" string="Group By">
+                    <filter string="Customer" name="group_partner" context="{'group_by': 'partner_id'}"/>
+                    <filter string="Plan" name="group_plan" context="{'group_by': 'plan_id'}"/>
+                    <filter string="Status" name="group_status" context="{'group_by': 'state'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
     <!-- Subscription Action -->
     <record id="action_subscription_subscription" model="ir.actions.act_window">
         <field name="name">Subscriptions</field>
         <field name="res_model">subscription.subscription</field>
         <field name="view_mode">tree,form</field>
+        <field name="search_view_id" ref="view_subscription_search"/>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Create a new subscription for a customer.
+            </p>
+        </field>
     </record>
 
     <!-- Billing Period List View -->

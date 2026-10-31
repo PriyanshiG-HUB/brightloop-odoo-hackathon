@@ -17,6 +17,13 @@ class SubscriptionLine(models.Model):
     currency_id = fields.Many2one(related="subscription_id.currency_id", store=True)
     subtotal = fields.Monetary(compute="_compute_subtotal", store=True)
 
+    @api.onchange("product_id")
+    def _onchange_product_id(self):
+        if self.product_id:
+            base_price = self.product_id.list_price
+            extra_price = getattr(self.product_id, "variant_extra_price", 0.0)
+            self.price_unit = base_price + extra_price
+
     @api.depends("quantity", "price_unit", "discount")
     def _compute_subtotal(self):
         for line in self:
@@ -29,4 +36,3 @@ class SubscriptionLine(models.Model):
                 raise ValidationError("Subscription quantity must be greater than zero.")
             if not 0 <= line.discount <= 100:
                 raise ValidationError("Line discount must be between 0 and 100.")
-

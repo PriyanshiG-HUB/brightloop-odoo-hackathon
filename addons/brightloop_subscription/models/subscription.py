@@ -15,6 +15,7 @@ class Subscription(models.Model):
     partner_id = fields.Many2one("res.partner", required=True, ondelete="restrict", index=True)
     plan_id = fields.Many2one("subscription.plan", required=True, ondelete="restrict")
     sale_order_id = fields.Many2one("sale.order", readonly=True, copy=False)
+    quotation_id = fields.Many2one("subscription.quotation", readonly=True, copy=False, string="Source Quotation")
     start_date = fields.Date(required=True, default=fields.Date.context_today)
     end_date = fields.Date()
     next_invoice_date = fields.Date(index=True)
@@ -25,6 +26,7 @@ class Subscription(models.Model):
             ("confirmed", "Confirmed"),
             ("active", "Active"),
             ("paused", "Paused"),
+            ("cancelled", "Cancelled"),
             ("closed", "Closed"),
         ],
         default="draft",
@@ -42,6 +44,9 @@ class Subscription(models.Model):
     )
     amount_untaxed = fields.Monetary(compute="_compute_amounts", store=True)
     amount_total = fields.Monetary(compute="_compute_amounts", store=True)
+    billing_period_ids = fields.One2many(
+        "subscription.billing.period", "subscription_id", string="Billing History"
+    )
 
     _sql_constraints = [
         ("subscription_name_company_unique", "unique(name, company_id)", "Subscription number must be unique."),
@@ -67,10 +72,12 @@ class Subscription(models.Model):
     def _onchange_plan_id(self):
         if self.plan_id:
             self.currency_id = self.plan_id.currency_id
+            extra_price = getattr(self.plan_id.product_id, "variant_extra_price", 0.0)
+            unit_price = self.plan_id.price or (self.plan_id.product_id.list_price + extra_price)
             self.line_ids = [(5, 0, 0), (0, 0, {
                 "product_id": self.plan_id.product_id.id,
                 "quantity": self.plan_id.minimum_quantity,
-                "price_unit": self.plan_id.price,
+                "price_unit": unit_price,
             })]
 
     @api.constrains("start_date", "end_date", "plan_id", "line_ids")
@@ -121,6 +128,15 @@ class Subscription(models.Model):
 
     def action_resume(self):
         return self.action_activate()
+
+    def action_cancel(self):
+        for subscription in self:
+            if subscription.plan_id and not subscription.plan_id.allow_cancel:
+                raise UserError(_("Cancellation is not allowed for this plan."))
+            if subscription.state in ("closed", "cancelled"):
+                raise UserError(_("Subscription is already %s.") % subscription.state)
+        self.write({"state": "cancelled"})
+        return True
 
     def action_close(self):
         for subscription in self:

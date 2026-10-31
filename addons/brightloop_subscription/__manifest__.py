@@ -22,7 +22,10 @@
         "data/cron.xml",
 
         # Views and actions must load before menus
+        "views/product_views.xml",
+        "views/customer_views.xml",
         "views/plan_views.xml",
+        "views/quotation_views.xml",
         "views/subscription_views.xml",
         "views/discount_views.xml",
         "views/dashboard_views.xml",
