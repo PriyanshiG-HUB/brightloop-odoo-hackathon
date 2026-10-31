@@ -57,6 +57,26 @@
         </field>
     </record>
 
+    <!-- Staff can access plans in their company -->
+    <record id="rule_plan_staff_company" model="ir.rule">
+        <field name="name">Plans: staff company access</field>
+        <field name="model_id" ref="model_subscription_plan"/>
+        <field name="groups" eval="[(4, ref('brightloop_subscription.group_brightloop_staff'))]"/>
+        <field name="domain_force">
+            ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+        </field>
+    </record>
+
+    <!-- Staff can access discounts in their company -->
+    <record id="rule_discount_staff_company" model="ir.rule">
+        <field name="name">Discounts: staff company access</field>
+        <field name="model_id" ref="model_subscription_discount"/>
+        <field name="groups" eval="[(4, ref('brightloop_subscription.group_brightloop_staff'))]"/>
+        <field name="domain_force">
+            ['|', ('company_id', '=', False), ('company_id', 'in', company_ids)]
+        </field>
+    </record>
+
 
     <!-- ============================================ -->
     <!-- PORTAL ACCESS RULES                          -->

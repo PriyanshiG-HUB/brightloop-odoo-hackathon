@@ -83,6 +83,15 @@
                 </header>
 
                 <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_view_invoices"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-pencil-square-o"
+                                invisible="invoice_count == 0">
+                            <field name="invoice_count" widget="statinfo" string="Invoices"/>
+                        </button>
+                    </div>
                     <group>
                         <group>
                             <field name="name" readonly="1"/>
@@ -132,6 +141,7 @@
 
                     <group class="oe_subtotal_footer">
                         <field name="amount_untaxed"/>
+                        <field name="amount_tax"/>
                         <field name="amount_total"/>
                     </group>
                 </sheet>

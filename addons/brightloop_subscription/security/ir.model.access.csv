@@ -21,3 +21,6 @@ access_quotation_admin,quotation admin,model_subscription_quotation,brightloop_s
 access_quotation_line_staff,quotation line staff,model_subscription_quotation_line,brightloop_subscription.group_brightloop_staff,1,1,1,0
 access_quotation_line_admin,quotation line admin,model_subscription_quotation_line,brightloop_subscription.group_brightloop_admin,1,1,1,1
 access_quotation_portal,quotation portal,model_subscription_quotation,base.group_portal,1,0,0,0
+access_subscription_line_portal,subscription line portal,model_subscription_subscription_line,base.group_portal,1,0,0,0
+access_quotation_line_portal,quotation line portal,model_subscription_quotation_line,base.group_portal,1,0,0,0
+access_subscription_plan_portal,subscription plan portal,model_subscription_plan,base.group_portal,1,0,0,0

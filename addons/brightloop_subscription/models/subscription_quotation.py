@@ -39,6 +39,8 @@ class SubscriptionQuotationTemplateLine(models.Model):
         if self.product_id:
             extra = getattr(self.product_id, "variant_extra_price", 0.0)
             self.price_unit = self.product_id.list_price + extra
+            if self.product_id.taxes_id:
+                self.tax_ids = [(6, 0, self.product_id.taxes_id.ids)]
 
 
 class SubscriptionQuotation(models.Model):
@@ -217,6 +219,8 @@ class SubscriptionQuotationLine(models.Model):
         if self.product_id:
             extra = getattr(self.product_id, "variant_extra_price", 0.0)
             self.price_unit = self.product_id.list_price + extra
+            if self.product_id.taxes_id:
+                self.tax_ids = [(6, 0, self.product_id.taxes_id.ids)]
 
     @api.depends("quantity", "price_unit", "discount")
     def _compute_subtotal(self):

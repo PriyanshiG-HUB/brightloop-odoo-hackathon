@@ -46,7 +46,9 @@ class Subscription(models.Model):
         "res.company", default=lambda self: self.env.company, required=True, index=True
     )
     amount_untaxed = fields.Monetary(compute="_compute_amounts", store=True)
+    amount_tax = fields.Monetary(compute="_compute_amounts", store=True, string="Taxes")
     amount_total = fields.Monetary(compute="_compute_amounts", store=True)
+    invoice_count = fields.Integer(compute="_compute_invoice_count", string="Invoices")
     billing_period_ids = fields.One2many(
         "subscription.billing.period", "subscription_id", string="Billing History"
     )
@@ -55,7 +57,7 @@ class Subscription(models.Model):
         ("subscription_name_company_unique", "unique(name, company_id)", "Subscription number must be unique."),
     ]
 
-    @api.depends("line_ids.subtotal", "discount_ids", "line_ids.quantity")
+    @api.depends("line_ids.subtotal", "line_ids.tax_ids", "discount_ids", "line_ids.quantity")
     def _compute_amounts(self):
         today = fields.Date.context_today(self)
         for subscription in self:
@@ -72,7 +74,47 @@ class Subscription(models.Model):
                     elif discount.discount_type == "fixed":
                         discount_amount += min(discount.discount_value, applicable_total)
             subscription.amount_untaxed = max(lines_total - discount_amount, 0)
-            subscription.amount_total = subscription.amount_untaxed
+
+            total_tax = 0.0
+            currency = subscription.currency_id or subscription.company_id.currency_id
+            for line in subscription.line_ids:
+                if line.tax_ids:
+                    line_taxes = line.tax_ids.compute_all(
+                        line.price_unit * (1 - line.discount / 100.0),
+                        currency=currency,
+                        quantity=line.quantity,
+                        product=line.product_id,
+                        partner=subscription.partner_id,
+                    )
+                    total_tax += line_taxes["total_included"] - line_taxes["total_excluded"]
+
+            if lines_total > 0 and discount_amount > 0:
+                tax_ratio = subscription.amount_untaxed / lines_total
+                total_tax = total_tax * tax_ratio
+
+            subscription.amount_tax = total_tax
+            subscription.amount_total = subscription.amount_untaxed + total_tax
+
+    def _compute_invoice_count(self):
+        for sub in self:
+            invoices = sub.billing_period_ids.filtered(lambda p: p.invoice_id).mapped("invoice_id")
+            sub.invoice_count = len(invoices)
+
+    def action_view_invoices(self):
+        self.ensure_one()
+        invoices = self.billing_period_ids.filtered(lambda p: p.invoice_id).mapped("invoice_id")
+        action = {
+            "name": _("Invoices"),
+            "type": "ir.actions.act_window",
+            "res_model": "account.move",
+            "view_mode": "tree,form",
+            "domain": [("id", "in", invoices.ids)],
+            "context": {"default_move_type": "out_invoice"},
+        }
+        if len(invoices) == 1:
+            action["res_id"] = invoices.id
+            action["view_mode"] = "form"
+        return action
 
     @api.onchange("plan_id")
     def _onchange_plan_id(self):
@@ -394,7 +436,23 @@ class Subscription(models.Model):
         return True
 
     @api.model
+    def _check_auto_close_plans(self):
+        today = fields.Date.context_today(self)
+        expired_subscriptions = self.search([
+            ("state", "=", "active"),
+            ("plan_id.auto_close", "=", True),
+            ("plan_id.end_date", "<", today),
+        ])
+        for sub in expired_subscriptions:
+            try:
+                sub.action_close()
+                _logger.info("Auto-closed subscription %s because plan %s has reached its end date.", sub.name, sub.plan_id.name)
+            except Exception as e:
+                _logger.error("Failed to auto-close subscription %s: %s", sub.name, e)
+
+    @api.model
     def _cron_generate_invoices(self):
+        self._check_auto_close_plans()
         today = fields.Date.context_today(self)
         subscriptions = self.search([
             ("state", "=", "active"),
