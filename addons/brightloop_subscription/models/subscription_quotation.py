@@ -30,6 +30,7 @@ class SubscriptionQuotationTemplateLine(models.Model):
     quantity = fields.Float(required=True, default=1)
     price_unit = fields.Monetary(required=True, currency_field="currency_id")
     discount = fields.Float(default=0)
+    tax_ids = fields.Many2many("account.tax", string="Taxes")
     currency_id = fields.Many2one(
         "res.currency", related="template_id.plan_id.currency_id", store=True, readonly=True
     )

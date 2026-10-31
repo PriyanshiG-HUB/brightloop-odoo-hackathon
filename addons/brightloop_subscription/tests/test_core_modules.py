@@ -123,6 +123,9 @@ class TestBrightloopCoreModules(TransactionCase):
             ],
         })
         self.assertEqual(template.validity_days, 15)
+        template_line = template.line_ids
+        template_line._onchange_product_id()
+        self.assertEqual(template_line.tax_ids, self.product.taxes_id)
 
         quotation = self.env["subscription.quotation"].create({
             "partner_id": self.customer.id,
@@ -163,8 +166,7 @@ class TestBrightloopCoreModules(TransactionCase):
         self.assertEqual(sub.line_ids[0].quantity, 3)
 
     def test_06_password_validation(self):
-        """Test password complexity requirement enforcement."""
-        # Valid password (8+ chars, upper, lower, special)
+        """Validate raw passwords at creation and through every update path."""
         valid_user = self.env["res.users"].create({
             "name": "Staff Alice",
             "login": "alice@brightloop.test",
@@ -172,29 +174,36 @@ class TestBrightloopCoreModules(TransactionCase):
         })
         self.assertEqual(valid_user.login, "alice@brightloop.test")
 
-        # Too short
-        with self.assertRaises(ValidationError):
-            self.env["res.users"].create({
-                "name": "Short",
-                "login": "short@brightloop.test",
-                "password": "Ab1!",
-            })
+        self.env["res.users"].create({
+            "name": "Staff Bob",
+            "login": "bob@brightloop.test",
+            "password": "AnotherValid9#",
+        })
 
-        # Missing uppercase
-        with self.assertRaises(ValidationError):
-            self.env["res.users"].create({
-                "name": "NoUpper",
-                "login": "noupper@brightloop.test",
-                "password": "securepassword123!",
-            })
+        invalid_passwords = {
+            "Eight8!": "too short",
+            "securepassword123!": "missing uppercase",
+            "SECUREPASSWORD123!": "missing lowercase",
+            "SecurePassword123": "missing special character",
+            "": "empty",
+        }
+        for index, (password, _reason) in enumerate(invalid_passwords.items()):
+            with self.assertRaises(ValidationError):
+                self.env["res.users"].create({
+                    "name": "Invalid %s" % index,
+                    "login": "invalid-%s@brightloop.test" % index,
+                    "password": password,
+                })
 
-        # Missing special character
         with self.assertRaises(ValidationError):
-            self.env["res.users"].create({
-                "name": "NoSpecial",
-                "login": "nospecial@brightloop.test",
-                "password": "SecurePassword123",
-            })
+            valid_user._change_password("WeakPassword")
+        valid_user._change_password("UpdatedPassword9$")
+
+        with self.assertRaises(ValidationError):
+            valid_user.write({"new_password": "WeakPassword"})
+        valid_user.write({"new_password": "AdminUpdated9%"})
+
+        valid_user.write({"name": "Staff Alice Updated", "email": "alice.updated@brightloop.test"})
 
 
     def test_07_dashboard_sql_aggregation(self):
@@ -230,7 +239,7 @@ class TestBrightloopCoreModules(TransactionCase):
             "line_ids": [
                 (0, 0, {
                     "product_id": self.product.id,
-                    "quantity": 1,
+                    "quantity": 2,
                     "price_unit": 65,
                 })
             ],

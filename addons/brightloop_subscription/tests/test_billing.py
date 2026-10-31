@@ -9,6 +9,17 @@ class TestBrightloopBilling(TransactionCase):
     @classmethod
     def setUpClass(cls):
         super().setUpClass()
+        company_partner = cls.env.company.partner_id
+        india = cls.env.ref("base.in")
+        company_partner.write({
+            "street": "100 Brightloop Avenue",
+            "city": "New Delhi",
+            "zip": "110001",
+            "country_id": india.id,
+            "state_id": cls.env["res.country.state"].search(
+                [("country_id", "=", india.id)], limit=1
+            ).id,
+        })
         cls.income_account = cls.env["account.account"].create({
             "code": "400000",
             "name": "Brightloop Sales",
